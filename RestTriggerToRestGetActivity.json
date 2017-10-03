@@ -59,7 +59,9 @@
                                     },
                                     {
                                         "name": "pathParams",
-                                        "value": {},
+                                        "value": {
+                                          "test": "test"
+                                        },
                                         "required": false,
                                         "type": "params"
                                     },
