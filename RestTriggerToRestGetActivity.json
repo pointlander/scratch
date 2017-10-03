@@ -59,7 +59,9 @@
                   },
                   {
                     "name": "pathParams",
-                    "value": null,
+                    "value": {
+                      "id": "0"
+                    },
                     "required": false,
                     "type": "params"
                   },
