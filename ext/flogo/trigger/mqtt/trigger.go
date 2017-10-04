@@ -3,6 +3,8 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strconv"
 	"time"
 
@@ -10,11 +12,26 @@ import (
 	"github.com/TIBCOSoftware/flogo-lib/core/action"
 	"github.com/TIBCOSoftware/flogo-lib/core/trigger"
 	"github.com/TIBCOSoftware/flogo-lib/logger"
+	condition "github.com/TIBCOSoftware/mashling/lib/conditions"
+	"github.com/TIBCOSoftware/mashling/lib/util"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 // log is the default package logger
 var log = logger.GetLogger("trigger-tibco-mqtt")
+
+//OptimizedHandler optimized handler
+type OptimizedHandler struct {
+	defaultActionId string
+	settings        map[string]interface{}
+	dispatches      []*Dispatch
+}
+
+//Dispatch holds dispatch actionId and condition
+type Dispatch struct {
+	actionId  string
+	condition string
+}
 
 // MqttTrigger is simple MQTT trigger
 type MqttTrigger struct {
@@ -68,14 +85,115 @@ func (t *MqttTrigger) Start() error {
 		opts.SetStore(mqtt.NewFileStore(t.config.GetSetting("store")))
 	}
 
+	handlers := make(map[string]*OptimizedHandler)
+	for _, h := range t.config.Handlers {
+		t := h.Settings["topic"]
+		if t == nil {
+			continue
+		}
+		topic := t.(string)
+
+		handler := handlers[topic]
+		if handler == nil {
+			settings := make(map[string]interface{})
+			for k, v := range h.Settings {
+				if k != util.Flogo_Trigger_Handler_Setting_Condition {
+					settings[k] = v
+				}
+			}
+
+			var dispatches []*Dispatch
+			if condition := h.Settings[util.Flogo_Trigger_Handler_Setting_Condition]; condition != nil {
+				dispatch := &Dispatch{
+					actionId:  h.ActionId,
+					condition: condition.(string),
+				}
+				dispatches = append(dispatches, dispatch)
+			}
+
+			handler = &OptimizedHandler{
+				defaultActionId: h.ActionId,
+				settings:        settings,
+				dispatches:      dispatches,
+			}
+			handlers[topic] = handler
+			continue
+		}
+
+		if condition := h.Settings[util.Flogo_Trigger_Handler_Setting_Condition]; condition != nil {
+			dispatch := &Dispatch{
+				actionId:  h.ActionId,
+				condition: condition.(string),
+			}
+			handler.dispatches = append(handler.dispatches, dispatch)
+		} else {
+			handler.defaultActionId = h.ActionId
+		}
+	}
+
 	opts.SetDefaultPublishHandler(func(client mqtt.Client, msg mqtt.Message) {
 		topic := msg.Topic()
 		//TODO we should handle other types, since mqtt message format are data-agnostic
 		payload := string(msg.Payload())
 		log.Debug("Received msg:", payload)
-		actionURI, found := t.topicToActionURI[topic]
+		handler, found := handlers[topic]
 		if found {
-			t.RunAction(actionURI, payload)
+			actionId := ""
+			for _, dispatch := range handler.dispatches {
+				expressionStr := dispatch.condition
+				//Get condtion and expression type
+				conditionOperation, exprType, err := condition.GetConditionOperationAndExpressionType(expressionStr)
+
+				if err != nil || exprType == condition.EXPR_TYPE_NOT_VALID {
+					str := fmt.Sprintf("not able parse the condition '%v' mentioned for content based handler. skipping the handler.", expressionStr)
+					log.Error(str)
+					continue
+				}
+
+				log.Debugf("Expression type: %v", exprType)
+				log.Debugf("conditionOperation.LHS %v", conditionOperation.LHS)
+				log.Debugf("conditionOperation.OperatorInfo %v", conditionOperation.OperatorInfo().Names)
+				log.Debugf("conditionOperation.RHS %v", conditionOperation.RHS)
+
+				//Resolve expression's LHS based on expression type and
+				//evaluate the expression
+				if exprType == condition.EXPR_TYPE_CONTENT {
+					exprResult, err := condition.EvaluateCondition(*conditionOperation, payload)
+					if err != nil {
+						str := fmt.Sprintf("not able evaluate expression - %v with error - %v. skipping the handler.", expressionStr, err)
+						log.Error(str)
+					}
+					if exprResult {
+						actionId = dispatch.actionId
+					}
+				} else if exprType == condition.EXPR_TYPE_HEADER {
+					log.Error("header expression type is invalid for mqtt trigger condition")
+				} else if exprType == condition.EXPR_TYPE_ENV {
+					//environment variable based condition
+					envFlagValue := os.Getenv(conditionOperation.LHS)
+					log.Debugf("environment flag = %v, val = %v", conditionOperation.LHS, envFlagValue)
+					if envFlagValue != "" {
+						conditionOperation.LHS = envFlagValue
+						op := conditionOperation.Operator
+						exprResult := op.Eval(conditionOperation.LHS, conditionOperation.RHS)
+						if exprResult {
+							actionId = dispatch.actionId
+						}
+					}
+				}
+
+				if actionId != "" {
+					log.Debugf("dispatch resolved with the actionId - %v", actionId)
+					break
+				}
+			}
+			//If no dispatch is found, use default action
+			if actionId == "" {
+				actionId = handler.defaultActionId
+				log.Debugf("dispatch not resolved. Continue with default action - %v", actionId)
+			}
+
+			t.RunAction(actionId, payload)
 		} else {
 			log.Errorf("Topic %s not found", t.topicToActionURI[topic])
 		}
@@ -114,8 +232,9 @@ func (t *MqttTrigger) Start() error {
 // Stop implements ext.Trigger.Stop
 func (t *MqttTrigger) Stop() error {
 	//unsubscribe from topic
-	log.Debug("Unsubcribing from topic: ", t.config.Settings["topic"])
+
 	for _, handlerCfg := range t.config.Handlers {
+		log.Debug("Unsubcribing from topic: ", handlerCfg.GetSetting("topic"))
 		if token := t.client.Unsubscribe(handlerCfg.GetSetting("topic")); token.Wait() && token.Error() != nil {
 			log.Errorf("Error unsubscribing from topic %s: %s", handlerCfg.Settings["topic"], token.Error())
 		}
