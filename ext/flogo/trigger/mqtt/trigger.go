@@ -279,7 +279,7 @@ func (t *MqttTrigger) RunAction(actionURI string, payload string) {
 		data, err := json.Marshal(replyData)
 		if err != nil {
 			log.Error(err)
-		} else {
+		} else if req.ReplyTo != "" {
 			t.publishMessage(req.ReplyTo, string(data))
 		}
 	}
@@ -309,13 +309,17 @@ func (t *MqttTrigger) publishMessage(topic string, message string) {
 }
 
 func (t *MqttTrigger) constructStartRequest(message string) *StartRequest {
-	//TODO how to handle reply to, reply feature
 	req := &StartRequest{}
 
 	var content map[string]interface{}
 	err := json.Unmarshal([]byte(message), &content)
 	if err != nil {
 		log.Error("Error unmarshaling message ", err.Error())
+	}
+
+	if replyTo := content["replyTo"]; replyTo != nil {
+		req.ReplyTo = replyTo.(string)
+		delete(content, "replyTo")
 	}
 
 	pathParams := make(map[string]string)
