@@ -43,6 +43,22 @@
   ],
   "outputs": [
     {
+      "name": "params",
+      "type": "params"
+    },
+    {
+      "name": "pathParams",
+      "type": "params"
+    },
+    {
+      "name": "queryParams",
+      "type": "params"
+    },
+    {
+      "name": "content",
+      "type": "object"
+    },
+    {
       "name": "message",
       "type": "string"
     }

@@ -10,7 +10,7 @@ import (
 	"github.com/TIBCOSoftware/flogo-lib/core/action"
 	"github.com/TIBCOSoftware/flogo-lib/core/trigger"
 	"github.com/TIBCOSoftware/flogo-lib/logger"
-	"github.com/eclipse/paho.mqtt.golang"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 // log is the default package logger
@@ -184,8 +184,38 @@ func (t *MqttTrigger) publishMessage(topic string, message string) {
 func (t *MqttTrigger) constructStartRequest(message string) *StartRequest {
 	//TODO how to handle reply to, reply feature
 	req := &StartRequest{}
-	data := make(map[string]interface{})
-	data["message"] = message
+
+	var content map[string]interface{}
+	err := json.Unmarshal([]byte(message), &content)
+	if err != nil {
+		log.Error("Error unmarshaling message ", err.Error())
+	}
+
+	pathParams := make(map[string]string)
+	if params, ok := content["pathParams"].(map[string]interface{}); ok {
+		for k, v := range params {
+			if param, ok := v.(string); ok {
+				pathParams[k] = param
+			}
+		}
+	}
+
+	queryParams := make(map[string]string)
+	if params, ok := content["queryParams"].(map[string]interface{}); ok {
+		for k, v := range params {
+			if param, ok := v.(string); ok {
+				queryParams[k] = param
+			}
+		}
+	}
+
+	data := map[string]interface{}{
+		"params":      pathParams,
+		"pathParams":  pathParams,
+		"queryParams": queryParams,
+		"content":     content,
+		"message":     message,
+	}
 	req.Data = data
 	return req
 }
