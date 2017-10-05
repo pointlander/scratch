@@ -61,7 +61,7 @@ type OptimizedHandler struct {
 }
 
 // GetActionID gets the action id of the matched handler
-func (h *OptimizedHandler) GetActionID(payload string) string {
+func (h *OptimizedHandler) GetActionID(payload string, span Span) string {
 	actionId := ""
 
 	for _, dispatch := range h.dispatches {
@@ -70,8 +70,7 @@ func (h *OptimizedHandler) GetActionID(payload string) string {
 		conditionOperation, exprType, err := condition.GetConditionOperationAndExpressionType(expressionStr)
 
 		if err != nil || exprType == condition.EXPR_TYPE_NOT_VALID {
-			str := fmt.Sprintf("not able parse the condition '%v' mentioned for content based handler. skipping the handler.", expressionStr)
-			log.Error(str)
+			span.Error("not able parse the condition '%v' mentioned for content based handler. skipping the handler.", expressionStr)
 			continue
 		}
 
@@ -85,14 +84,13 @@ func (h *OptimizedHandler) GetActionID(payload string) string {
 		if exprType == condition.EXPR_TYPE_CONTENT {
 			exprResult, err := condition.EvaluateCondition(*conditionOperation, payload)
 			if err != nil {
-				str := fmt.Sprintf("not able evaluate expression - %v with error - %v. skipping the handler.", expressionStr, err)
-				log.Error(str)
+				span.Error("not able evaluate expression - %v with error - %v. skipping the handler.", expressionStr, err)
 			}
 			if exprResult {
 				actionId = dispatch.actionId
 			}
 		} else if exprType == condition.EXPR_TYPE_HEADER {
-			log.Error("header expression type is invalid for mqtt trigger condition")
+			span.Error("header expression type is invalid for mqtt trigger condition")
 		} else if exprType == condition.EXPR_TYPE_ENV {
 			//environment variable based condition
 			envFlagValue := os.Getenv(conditionOperation.LHS)
@@ -342,7 +340,7 @@ func (t *MqttTrigger) Start() error {
 		log.Debug("Received msg:", payload)
 		handler, found := t.handlers[topic]
 		if found {
-			t.RunAction(handler.GetActionID(payload), payload, span)
+			t.RunAction(handler.GetActionID(payload, span), payload, span)
 		} else {
 			span.Error("Topic %s not found", topic)
 		}
