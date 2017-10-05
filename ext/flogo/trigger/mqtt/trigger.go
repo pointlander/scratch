@@ -390,15 +390,11 @@ func (t *MqttTrigger) Stop() error {
 func (t *MqttTrigger) RunAction(actionURI string, payload string, span Span) {
 
 	req := t.constructStartRequest(payload, span)
-	//err := json.NewDecoder(strings.NewReader(payload)).Decode(req)
-	//if err != nil {
-	//	//http.Error(w, err.Error(), http.StatusBadRequest)
-	//	log.Error("Error Starting action ", err.Error())
-	//	return
-	//}
 
-	//todo handle error
-	startAttrs, _ := t.metadata.OutputsToAttrs(req.Data, false)
+	startAttrs, err := t.metadata.OutputsToAttrs(req.Data, false)
+	if err != nil {
+		span.Error("Error setting up attrs: %v", err)
+	}
 
 	action := action.Get(actionURI)
 	context := trigger.NewContext(context.Background(), startAttrs)

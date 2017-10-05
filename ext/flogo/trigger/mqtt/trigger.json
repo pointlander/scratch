@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "title": "Receive MQTT Message",
   "author": "Michael Register <mregiste@tibco.com>",
-  "description": "Simple MQTT Trigger",
+  "description": "MQTT Trigger",
   "homepage": "https://github.com/TIBCOSoftware/mashling/tree/master/ext/flogo/trigger/mqtt",
   "settings":[
     {
