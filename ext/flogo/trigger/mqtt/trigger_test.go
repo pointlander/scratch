@@ -3,13 +3,15 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"io/ioutil"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/TIBCOSoftware/flogo-lib/core/action"
-	//MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/TIBCOSoftware/flogo-lib/core/trigger"
-	"io/ioutil"
-	//"time"
+
+	MQTT "github.com/eclipse/paho.mqtt.golang"
 )
 
 var jsonMetadata = getJsonMetadata()
@@ -25,7 +27,6 @@ func getJsonMetadata() string {
 const testConfig string = `{
   "name": "tibco-mqtt",
   "settings": {
-    "topic": "flogo/#",
     "broker": "tcp://127.0.0.1:1883",
     "id": "flogoEngine",
     "user": "",
@@ -44,13 +45,23 @@ const testConfig string = `{
   ]
 }`
 
+var _ action.Runner = &TestRunner{}
+
 type TestRunner struct {
+	t *testing.T
 }
 
 // Run implements action.Runner.Run
-func (tr *TestRunner) Run(context context.Context, action action.Action, uri string, options interface{}) (code int, data interface{}, err error) {
-	log.Debugf("Ran Action: %v", uri)
+func (tr *TestRunner) Run(context context.Context, action action.Action, uri string,
+	options interface{}) (code int, data interface{}, err error) {
+	tr.t.Logf("Ran Action: %v", uri)
 	return 0, nil, nil
+}
+
+func (tr *TestRunner) RunAction(context context.Context, actionID string, inputGenerator action.InputGenerator,
+	options map[string]interface{}) (results map[string]interface{}, err error) {
+	tr.t.Logf("Ran Action: %v", actionID)
+	return nil, nil
 }
 
 func TestInit(t *testing.T) {
@@ -64,14 +75,18 @@ func TestInit(t *testing.T) {
 	json.Unmarshal([]byte(testConfig), config)
 	tgr := f.New(&config)
 
-	runner := &TestRunner{}
+	runner := &TestRunner{t: t}
 
 	tgr.Init(runner)
 }
 
-/*
-// TODO Fix this test
 func TestEndpoint(t *testing.T) {
+
+	_, err := net.Dial("tcp", "127.0.0.1:1883")
+	if err != nil {
+		t.Log("MQTT message broker is not available, skipping test...")
+		return
+	}
 
 	// New  factory
 	md := trigger.NewMetadata(jsonMetadata)
@@ -82,7 +97,7 @@ func TestEndpoint(t *testing.T) {
 	json.Unmarshal([]byte(testConfig), &config)
 	tgr := f.New(&config)
 
-	runner := &TestRunner{}
+	runner := &TestRunner{t: t}
 
 	tgr.Init(runner)
 
@@ -101,23 +116,22 @@ func TestEndpoint(t *testing.T) {
 		panic(token.Error())
 	}
 
-	log.Debug("---- doing first publish ----")
+	t.Log("---- doing first publish ----")
 
-	token := client.Publish("test_start", 0, false, "Test message payload!")
+	token := client.Publish("test_start", 0, false, `{"message": "Test message payload!"}`)
 	token.Wait()
 
-	duration2 := time.Duration(2)*time.Second
+	duration2 := time.Duration(2) * time.Second
 	time.Sleep(duration2)
 
-	log.Debug("---- doing second publish ----")
+	t.Log("---- doing second publish ----")
 
-	token = client.Publish("test_start", 0, false, "Test message payload!")
+	token = client.Publish("test_start", 0, false, `{"message": "Test message payload!"}`)
 	token.Wait()
 
-	duration5 := time.Duration(5)*time.Second
+	duration5 := time.Duration(5) * time.Second
 	time.Sleep(duration5)
 
 	client.Disconnect(250)
-	log.Debug("Sample Publisher Disconnected")
+	t.Log("Sample Publisher Disconnected")
 }
-*/
