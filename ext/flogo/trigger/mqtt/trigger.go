@@ -3,7 +3,9 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"time"
@@ -15,10 +17,41 @@ import (
 	condition "github.com/TIBCOSoftware/mashling/lib/conditions"
 	"github.com/TIBCOSoftware/mashling/lib/util"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+
+	lightstep "github.com/lightstep/lightstep-tracer-go"
+	opentracing "github.com/opentracing/opentracing-go"
+	zipkin "github.com/openzipkin/zipkin-go-opentracing"
+	"sourcegraph.com/sourcegraph/appdash"
+	appdashtracing "sourcegraph.com/sourcegraph/appdash/opentracing"
+)
+
+const (
+	TracerNoOP      = "noop"
+	TracerZipKin    = "zipkin"
+	TracerAPPDash   = "appdash"
+	TracerLightStep = "lightstep"
+)
+
+var (
+	ErrorTracerEndpointRequired = errors.New("tracer endpoint required")
+	ErrorInvalidTracer          = errors.New("invalid tracer")
+	ErrorTracerTokenRequired    = errors.New("tracer token required")
 )
 
 // log is the default package logger
 var log = logger.GetLogger("trigger-tibco-mqtt")
+
+// Span is a tracing span
+type Span struct {
+	opentracing.Span
+}
+
+// Error is for reporting errors
+func (s *Span) Error(format string, a ...interface{}) {
+	str := fmt.Sprintf(format, a...)
+	s.SetTag("error", str)
+	log.Error(str)
+}
 
 //OptimizedHandler optimized handler
 type OptimizedHandler struct {
@@ -102,6 +135,7 @@ type MqttTrigger struct {
 	client   mqtt.Client
 	config   *trigger.Config
 	handlers map[string]*OptimizedHandler
+	tracer   opentracing.Tracer
 }
 
 //NewFactory create a new Trigger factory
@@ -181,6 +215,99 @@ func (t *MqttTrigger) CreateHandlers() map[string]*OptimizedHandler {
 	return handlers
 }
 
+// getLocalIP gets the public ip address of the system
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "0.0.0.0"
+	}
+	for _, address := range addrs {
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return "0.0.0.0"
+}
+
+// configureTracer configures the distributed tracer
+func (t *MqttTrigger) configureTracer() {
+	tracer := TracerNoOP
+	if setting, ok := t.config.Settings["tracer"]; ok {
+		tracer = setting.(string)
+	}
+	tracerEndpoint := ""
+	if setting, ok := t.config.Settings["tracerEndpoint"]; ok {
+		tracerEndpoint = setting.(string)
+	}
+	tracerToken := ""
+	if setting, ok := t.config.Settings["tracerToken"]; ok {
+		tracerToken = setting.(string)
+	}
+	tracerDebug := false
+	if setting, ok := t.config.Settings["tracerDebug"]; ok {
+		tracerDebug = setting.(bool)
+	}
+	tracerSameSpan := false
+	if setting, ok := t.config.Settings["tracerSameSpan"]; ok {
+		tracerSameSpan = setting.(bool)
+	}
+	tracerID128Bit := true
+	if setting, ok := t.config.Settings["tracerID128Bit"]; ok {
+		tracerID128Bit = setting.(bool)
+	}
+
+	switch tracer {
+	case TracerNoOP:
+		t.tracer = &opentracing.NoopTracer{}
+	case TracerZipKin:
+		if tracerEndpoint == "" {
+			panic(ErrorTracerEndpointRequired)
+		}
+
+		collector, err := zipkin.NewHTTPCollector(tracerEndpoint)
+		if err != nil {
+			panic(fmt.Sprintf("unable to create Zipkin HTTP collector: %+v\n", err))
+		}
+
+		recorder := zipkin.NewRecorder(collector, tracerDebug,
+			getLocalIP(), t.config.Name)
+
+		tracer, err := zipkin.NewTracer(
+			recorder,
+			zipkin.ClientServerSameSpan(tracerSameSpan),
+			zipkin.TraceID128Bit(tracerID128Bit),
+		)
+		if err != nil {
+			panic(fmt.Sprintf("unable to create Zipkin tracer: %+v\n", err))
+		}
+
+		t.tracer = tracer
+	case TracerAPPDash:
+		if tracerEndpoint == "" {
+			panic(ErrorTracerEndpointRequired)
+		}
+
+		collector := appdash.NewRemoteCollector(tracerEndpoint)
+		chunkedCollector := appdash.NewChunkedCollector(collector)
+		tracer := appdashtracing.NewTracer(chunkedCollector)
+		t.tracer = tracer
+	case TracerLightStep:
+		if tracerToken == "" {
+			panic(ErrorTracerTokenRequired)
+		}
+
+		lightstepTracer := lightstep.NewTracer(lightstep.Options{
+			AccessToken: tracerToken,
+		})
+
+		t.tracer = lightstepTracer
+	default:
+		panic(ErrorInvalidTracer)
+	}
+}
+
 // Start implements ext.Trigger.Start
 func (t *MqttTrigger) Start() error {
 
@@ -199,17 +326,25 @@ func (t *MqttTrigger) Start() error {
 		opts.SetStore(mqtt.NewFileStore(t.config.GetSetting("store")))
 	}
 
+	t.configureTracer()
+
 	t.handlers = t.CreateHandlers()
 	opts.SetDefaultPublishHandler(func(client mqtt.Client, msg mqtt.Message) {
 		topic := msg.Topic()
+
+		span := Span{
+			Span: t.tracer.StartSpan(topic),
+		}
+		defer span.Finish()
+
 		//TODO we should handle other types, since mqtt message format are data-agnostic
 		payload := string(msg.Payload())
 		log.Debug("Received msg:", payload)
 		handler, found := t.handlers[topic]
 		if found {
-			t.RunAction(handler.GetActionID(payload), payload)
+			t.RunAction(handler.GetActionID(payload), payload, span)
 		} else {
-			log.Errorf("Topic %s not found", topic)
+			span.Error("Topic %s not found", topic)
 		}
 	})
 
@@ -254,9 +389,9 @@ func (t *MqttTrigger) Stop() error {
 }
 
 // RunAction starts a new Process Instance
-func (t *MqttTrigger) RunAction(actionURI string, payload string) {
+func (t *MqttTrigger) RunAction(actionURI string, payload string, span Span) {
 
-	req := t.constructStartRequest(payload)
+	req := t.constructStartRequest(payload, span)
 	//err := json.NewDecoder(strings.NewReader(payload)).Decode(req)
 	//if err != nil {
 	//	//http.Error(w, err.Error(), http.StatusBadRequest)
@@ -271,28 +406,28 @@ func (t *MqttTrigger) RunAction(actionURI string, payload string) {
 	context := trigger.NewContext(context.Background(), startAttrs)
 	_, replyData, err := t.runner.Run(context, action, actionURI, nil)
 	if err != nil {
-		log.Error("Error starting action: ", err.Error())
+		span.Error("Error starting action: %v", err)
 	}
 	log.Debugf("Ran action: [%s]", actionURI)
 
 	if replyData != nil {
 		data, err := json.Marshal(replyData)
 		if err != nil {
-			log.Error(err)
+			span.Error(err.Error())
 		} else if req.ReplyTo != "" {
-			t.publishMessage(req.ReplyTo, string(data))
+			t.publishMessage(req.ReplyTo, string(data), span)
 		}
 	}
 }
 
-func (t *MqttTrigger) publishMessage(topic string, message string) {
+func (t *MqttTrigger) publishMessage(topic string, message string, span Span) {
 
 	log.Debug("ReplyTo topic: ", topic)
 	log.Debug("Publishing message: ", message)
 
 	qos, err := strconv.Atoi(t.config.GetSetting("qos"))
 	if err != nil {
-		log.Error("Error converting \"qos\" to an integer ", err.Error())
+		span.Error("Error converting \"qos\" to an integer %v", err)
 		return
 	}
 	if len(topic) == 0 {
@@ -303,18 +438,18 @@ func (t *MqttTrigger) publishMessage(topic string, message string) {
 	sent := token.WaitTimeout(5000 * time.Millisecond)
 	if !sent {
 		// Timeout occurred
-		log.Errorf("Timeout occurred while trying to publish to topic '%s'", topic)
+		span.Error("Timeout occurred while trying to publish to topic '%s'", topic)
 		return
 	}
 }
 
-func (t *MqttTrigger) constructStartRequest(message string) *StartRequest {
+func (t *MqttTrigger) constructStartRequest(message string, span Span) *StartRequest {
 	req := &StartRequest{}
 
 	var content map[string]interface{}
 	err := json.Unmarshal([]byte(message), &content)
 	if err != nil {
-		log.Error("Error unmarshaling message ", err.Error())
+		span.Error("Error unmarshaling message ", err.Error())
 	}
 
 	if replyTo := content["replyTo"]; replyTo != nil {
@@ -340,12 +475,15 @@ func (t *MqttTrigger) constructStartRequest(message string) *StartRequest {
 		}
 	}
 
+	ctx := opentracing.ContextWithSpan(context.Background(), span)
+
 	data := map[string]interface{}{
 		"params":      pathParams,
 		"pathParams":  pathParams,
 		"queryParams": queryParams,
 		"content":     content,
 		"message":     message,
+		"tracing":     ctx,
 	}
 	req.Data = data
 	return req
