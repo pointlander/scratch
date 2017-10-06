@@ -56,7 +56,6 @@ func (s *Span) Error(format string, a ...interface{}) {
 //OptimizedHandler optimized handler
 type OptimizedHandler struct {
 	defaultActionId string
-	settings        map[string]interface{}
 	dispatches      []*Dispatch
 }
 
@@ -174,29 +173,8 @@ func (t *MqttTrigger) CreateHandlers() map[string]*OptimizedHandler {
 
 		handler := handlers[topic]
 		if handler == nil {
-			settings := make(map[string]interface{})
-			for k, v := range h.Settings {
-				if k != util.Flogo_Trigger_Handler_Setting_Condition {
-					settings[k] = v
-				}
-			}
-
-			var dispatches []*Dispatch
-			if condition := h.Settings[util.Flogo_Trigger_Handler_Setting_Condition]; condition != nil {
-				dispatch := &Dispatch{
-					actionId:  h.ActionId,
-					condition: condition.(string),
-				}
-				dispatches = append(dispatches, dispatch)
-			}
-
-			handler = &OptimizedHandler{
-				defaultActionId: h.ActionId,
-				settings:        settings,
-				dispatches:      dispatches,
-			}
+			handler = &OptimizedHandler{}
 			handlers[topic] = handler
-			continue
 		}
 
 		if condition := h.Settings[util.Flogo_Trigger_Handler_Setting_Condition]; condition != nil {

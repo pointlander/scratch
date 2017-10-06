@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/TIBCOSoftware/flogo-lib/core/action"
 	"github.com/TIBCOSoftware/flogo-lib/core/trigger"
-
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 var jsonMetadata = getJsonMetadata()
@@ -71,9 +72,12 @@ func TestInit(t *testing.T) {
 	f := NewFactory(md)
 
 	// New Trigger
-	config := trigger.Config{}
-	json.Unmarshal([]byte(testConfig), config)
-	tgr := f.New(&config)
+	config := &trigger.Config{}
+	err := json.Unmarshal([]byte(testConfig), config)
+	if err != nil {
+		t.Error(err)
+	}
+	tgr := f.New(config)
 
 	runner := &TestRunner{t: t}
 
@@ -93,9 +97,12 @@ func TestEndpoint(t *testing.T) {
 	f := NewFactory(md)
 
 	// New Trigger
-	config := trigger.Config{}
-	json.Unmarshal([]byte(testConfig), &config)
-	tgr := f.New(&config)
+	config := &trigger.Config{}
+	err = json.Unmarshal([]byte(testConfig), config)
+	if err != nil {
+		t.Error(err)
+	}
+	tgr := f.New(config)
 
 	runner := &TestRunner{t: t}
 
@@ -134,4 +141,105 @@ func TestEndpoint(t *testing.T) {
 
 	client.Disconnect(250)
 	t.Log("Sample Publisher Disconnected")
+}
+
+func TestHandler(t *testing.T) {
+	tracer := &opentracing.NoopTracer{}
+	span := Span{
+		Span: tracer.StartSpan("topic"),
+	}
+	defer span.Finish()
+
+	handler := &OptimizedHandler{
+		defaultActionId: "action_1",
+		dispatches: []*Dispatch{
+			{
+				actionId:  "action_2",
+				condition: "${trigger.content.value == A}",
+			},
+			{
+				actionId:  "action_3",
+				condition: "${env.value == A}",
+			},
+		},
+	}
+
+	action := handler.GetActionID("null", span)
+	if action != "action_1" {
+		t.Error("expected action_1")
+	}
+
+	content := `{"value": "A"}`
+	action = handler.GetActionID(content, span)
+	if action != "action_2" {
+		t.Error("expected action_2")
+	}
+
+	os.Setenv("value", "A")
+	action = handler.GetActionID("null", span)
+	if action != "action_3" {
+		t.Error("expected action_3")
+	}
+}
+
+const testCreateHandlersConfig string = `{
+  "name": "tibco-mqtt",
+  "settings": {
+    "broker": "tcp://127.0.0.1:1883",
+    "id": "flogoEngine",
+    "user": "",
+    "password": "",
+    "store": "",
+    "qos": "0",
+    "cleansess": "false"
+  },
+  "handlers": [
+    {
+      "actionId": "action_1",
+      "settings": {
+        "topic": "topic_1"
+      }
+    },
+		{
+      "actionId": "action_2",
+      "settings": {
+        "topic": "topic_1",
+				"Condition": "${trigger.content.value == A}"
+      }
+    },
+		{
+      "actionId": "action_3",
+      "settings": {
+        "topic": "topic_2"
+      }
+    }
+  ]
+}`
+
+func TestCreateHandlers(t *testing.T) {
+	// New  factory
+	md := trigger.NewMetadata(jsonMetadata)
+	f := NewFactory(md)
+
+	// New Trigger
+	config := &trigger.Config{}
+	err := json.Unmarshal([]byte(testCreateHandlersConfig), config)
+	if err != nil {
+		t.Error(err)
+	}
+	tgr := f.New(config).(*MqttTrigger)
+
+	handlers := tgr.CreateHandlers()
+	if handlers["topic_1"].defaultActionId != "action_1" {
+		t.Error("default action for topic_1 should be action_1")
+	}
+	if len(handlers["topic_1"].dispatches) != 1 {
+		t.Error("there should be 1 dispatches for topic_1")
+	}
+	if handlers["topic_2"].defaultActionId != "action_3" {
+		t.Error("default action for topic_2 should be action_3")
+	}
+	if len(handlers["topic_2"].dispatches) != 0 {
+		t.Error("there should be 0 dispatches for topic_2")
+	}
 }
