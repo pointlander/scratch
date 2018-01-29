@@ -65,7 +65,7 @@
                                     },
                                     {
                                         "name": "queryParams",
-                                        "value": null,
+                                        "value": {},
                                         "required": false,
                                         "type": "params"
                                     },
