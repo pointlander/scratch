@@ -53,19 +53,19 @@
                                     },
                                     {
                                         "name": "uri",
-                                        "value": "http://petstore.swagger.io/v2/pet/:id",
+                                        "value": "http://petstore.swagger.io/v2/pet/:petId",
                                         "required": true,
                                         "type": "string"
                                     },
                                     {
                                         "name": "pathParams",
-                                        "value": {},
+                                        "value": null,
                                         "required": false,
                                         "type": "params"
                                     },
                                     {
                                         "name": "queryParams",
-                                        "value": {},
+                                        "value": null,
                                         "required": false,
                                         "type": "params"
                                     },
@@ -79,8 +79,8 @@
                                 "inputMappings": [
                                     {
                                         "type": 1,
-                                        "value": "{T.pathParams}.petId",
-                                        "mapTo": "pathParams.id"
+                                        "value": "{T.pathParams}",
+                                        "mapTo": "pathParams"
                                     }
                                 ]
                             },
