@@ -79,16 +79,6 @@
                                 "inputMappings": [
                                     {
                                         "type": 1,
-                                        "value": "${trigger.pathParams}",
-                                        "mapTo": "pathParams"
-                                    },
-                                    {
-                                        "type": 1,
-                                        "value": "${trigger.queryParams}",
-                                        "mapTo": "queryParams"
-                                    },
-                                    {
-                                        "type": 1,
                                         "value": "${trigger.content}",
                                         "mapTo": "content"
                                     }
