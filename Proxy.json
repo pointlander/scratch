@@ -79,7 +79,7 @@
                                 "inputMappings": [
                                     {
                                         "type": 1,
-                                        "value": "${trigger.content}",
+                                        "value": "{T.content}",
                                         "mapTo": "content"
                                     }
                                 ]
