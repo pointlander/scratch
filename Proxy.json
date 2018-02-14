@@ -79,12 +79,12 @@
                                 "inputMappings": [
                                     {
                                         "type": 1,
-                                        "value": "$flow.method",
+                                        "value": "$rest_handler.method",
                                         "mapTo": "method"
                                     },
                                     {
                                         "type": 1,
-                                        "value": "$flow.uri",
+                                        "value": "$rest_handler.uri",
                                         "mapTo": "uri"
                                     },
                                     {
