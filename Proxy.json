@@ -147,6 +147,19 @@
                 }
             },
             "id": "flow",
+            "metadata": {
+              "input": [
+                {
+                  "name": "method",
+                  "type": "string"
+                },
+                {
+                  "name": "uri",
+                  "type": "string"
+                }
+              ],
+              "output": []
+            },
             "ref": "github.com/TIBCOSoftware/flogo-contrib/action/flow"
         }
     ]
