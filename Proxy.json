@@ -79,6 +79,16 @@
                                 "inputMappings": [
                                     {
                                         "type": 1,
+                                        "value": "${flow.method}",
+                                        "mapTo": "method"
+                                    },
+                                    {
+                                        "type": 1,
+                                        "value": "${flow.uri}",
+                                        "mapTo": "uri"
+                                    },
+                                    {
+                                        "type": 1,
                                         "value": "${trigger.pathParams}",
                                         "mapTo": "pathParams"
                                     },
