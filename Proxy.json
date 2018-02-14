@@ -27,9 +27,9 @@
     ],
     "actions": [
         {
-            "name": "flow",
             "data": {
                 "flow": {
+                    "name": "flow",
                     "explicitReply": true,
                     "type": 1,
                     "attributes": [],
@@ -79,12 +79,12 @@
                                 "inputMappings": [
                                     {
                                         "type": 1,
-                                        "value": "$rest_handler.method",
+                                        "value": "$flow.method",
                                         "mapTo": "method"
                                     },
                                     {
                                         "type": 1,
-                                        "value": "$rest_handler.uri",
+                                        "value": "$flow.uri",
                                         "mapTo": "uri"
                                     },
                                     {
