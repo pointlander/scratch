@@ -89,17 +89,17 @@
                                     },
                                     {
                                         "type": 1,
-                                        "value": "${trigger.pathParams}",
+                                        "value": "$flow.pathParams",
                                         "mapTo": "pathParams"
                                     },
                                     {
                                         "type": 1,
-                                        "value": "${trigger.queryParams}",
+                                        "value": "$flow.queryParams",
                                         "mapTo": "queryParams"
                                     },
                                     {
                                         "type": 1,
-                                        "value": "${trigger.content}",
+                                        "value": "$flow.content",
                                         "mapTo": "content"
                                     }
                                 ]
@@ -156,6 +156,18 @@
                 {
                   "name": "uri",
                   "type": "string"
+                },
+                {
+                  "name": "pathParams",
+                  "type": "params"
+                },
+                {
+                  "name": "queryParams",
+                  "type": "params"
+                },
+                {
+                  "name": "content",
+                  "type": "any"
                 }
               ],
               "output": []
