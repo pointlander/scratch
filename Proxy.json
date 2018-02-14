@@ -89,16 +89,6 @@
                                     },
                                     {
                                         "type": 1,
-                                        "value": "$flow.pathParams",
-                                        "mapTo": "pathParams"
-                                    },
-                                    {
-                                        "type": 1,
-                                        "value": "$flow.queryParams",
-                                        "mapTo": "queryParams"
-                                    },
-                                    {
-                                        "type": 1,
                                         "value": "$flow.content",
                                         "mapTo": "content"
                                     }
@@ -156,14 +146,6 @@
                 {
                   "name": "uri",
                   "type": "string"
-                },
-                {
-                  "name": "pathParams",
-                  "type": "params"
-                },
-                {
-                  "name": "queryParams",
-                  "type": "params"
                 },
                 {
                   "name": "content",
