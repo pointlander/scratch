@@ -159,11 +159,11 @@
                 },
                 {
                   "name": "pathParams",
-                  "type": "params"
+                  "type": "any"
                 },
                 {
                   "name": "queryParams",
-                  "type": "params"
+                  "type": "any"
                 },
                 {
                   "name": "content",
