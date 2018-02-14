@@ -149,7 +149,7 @@
                 },
                 {
                   "name": "content",
-                  "type": "any"
+                  "type": "object"
                 }
               ],
               "output": []
