@@ -42,8 +42,8 @@
                                 "name": "Invoke REST Service",
                                 "description": "Simple REST Activity",
                                 "type": 1,
-                                "activityType": "github-com-tibco-software-flogo-contrib-activity-rest",
-                                "activityRef": "github.com/TIBCOSoftware/flogo-contrib/activity/rest",
+                                "activityType": "github-com-tibco-software-mashling-ext-flogo-activity-rest",
+                                "activityRef": "github.com/TIBCOSoftware/mashling/ext/flogo/activity/rest",
                                 "attributes": [
                                     {
                                         "name": "method",
@@ -74,6 +74,11 @@
                                         "value": null,
                                         "required": false,
                                         "type": "any"
+                                    },
+                                    {
+                                        "name": "tracing",
+                                        "value": null,
+                                        "type": "any"
                                     }
                                 ],
                                 "inputMappings": [
@@ -91,6 +96,11 @@
                                         "type": 1,
                                         "value": "$flow.content",
                                         "mapTo": "content"
+                                    },
+                                    {
+                                        "type": 1,
+                                        "value": "${trigger.tracing}",
+                                        "mapTo": "tracing"
                                     }
                                 ]
                             }
