@@ -202,16 +202,7 @@
                   "type": "any"
                 }
               ],
-              "output": [
-                {
-                  "name": "result",
-                  "type": "any"
-                },
-                {
-                  "name": "status",
-                  "type": "integer"
-                }
-              ]
+              "output": []
             },
             "ref": "github.com/TIBCOSoftware/flogo-contrib/action/flow"
         }
