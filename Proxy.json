@@ -99,7 +99,7 @@
                                     },
                                     {
                                         "type": 1,
-                                        "value": "${trigger.tracing}",
+                                        "value": "$flow.tracing",
                                         "mapTo": "tracing"
                                     }
                                 ]
@@ -159,6 +159,10 @@
                 },
                 {
                   "name": "content",
+                  "type": "any"
+                },
+                {
+                  "name": "tracing",
                   "type": "any"
                 }
               ],
