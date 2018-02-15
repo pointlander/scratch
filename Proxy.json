@@ -128,7 +128,7 @@
                                 "inputMappings": [
                                     {
                                         "type": 1,
-                                        "value": "${activity[2].result}",
+                                        "value": "$activity[2].result",
                                         "mapTo": "data"
                                     }
                                 ]
