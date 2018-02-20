@@ -192,14 +192,6 @@
                 {
                   "name": "uri",
                   "type": "string"
-                },
-                {
-                  "name": "content",
-                  "type": "any"
-                },
-                {
-                  "name": "tracing",
-                  "type": "any"
                 }
               ],
               "output": []
